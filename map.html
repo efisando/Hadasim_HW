@@ -6,37 +6,37 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-        h1 { text-align: center; background-color: #4CAF50; color: white; margin: 0; padding: 15px; }
-        /* המפה תתפוס את כל שאר המסך */
-        #map { height: calc(100vh - 60px); width: 100%; }
+        .header { background-color: #4CAF50; color: white; padding: 15px; text-align: center; display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; font-size: 24px; }
+        /* עיצוב לכפתור האזעקה של המורה */
+        #alertBtn { background-color: #ff4444; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold;}
+        #alertBtn:hover { background-color: #cc0000; }
+        #map { height: calc(100vh - 65px); width: 100%; }
     </style>
 </head>
 <body>
 
-    <h1>📍 מערכת איכון טיול שנתי - ירושלים</h1>
+    <div class="header">
+        <h1>📍 מערכת איכון טיול שנתי - ירושלים</h1>
+        <button id="alertBtn" onclick="checkForWanderingStudents()">🚨 סריקת חריגות מרחק</button>
+    </div>
+    
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // יצירת המפה ומיקוד התחלתי על אזור ירושלים
         var map = L.map('map').setView([31.7683, 35.2137], 13);
-
-        // טעינת מפת הרחובות
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        // רשימה שתשמור את כל הסיכות (Markers) שיש כרגע על המפה
         var markers = {};
 
-        // פונקציה שמושכת נתונים מהשרת שלנו ומעדכנת את המפה
         async function fetchLocations() {
             try {
-                // קוראים לראוט שיצרנו בפייתון
                 const response = await fetch('/api/locations');
                 const locations = await response.json();
 
-                // עוברים על כל מיקום שקיבלנו מהשרת
                 locations.forEach(loc => {
                     let studentId = loc.StudentID;
                     let lat = loc.Latitude;
@@ -44,13 +44,10 @@
                     let studentName = loc.FirstName + " " + loc.LastName;
                     let popupText = `<b>${studentName}</b><br>עודכן ב: ${loc.Timestamp}`;
 
-                    // אם כבר יש סיכה לתלמידה הזו - רק נזיז אותה למיקום החדש
                     if (markers[studentId]) {
                         markers[studentId].setLatLng([lat, lng]);
                         markers[studentId].setPopupContent(popupText);
-                    } 
-                    // אם אין לה עדיין סיכה - ניצור אחת חדשה
-                    else {
+                    } else {
                         let newMarker = L.marker([lat, lng]).addTo(map);
                         newMarker.bindPopup(popupText);
                         markers[studentId] = newMarker;
@@ -61,11 +58,44 @@
             }
         }
 
-        // הפעלת הפונקציה מיד כשהדף עולה
         fetchLocations();
-
-        // בקשת רענון אוטומטית כל 10 שניות (עדכון חי!)
         setInterval(fetchLocations, 10000);
+
+        // --- הפונקציה החדשה של סעיף הבונוס ---
+        async function checkForWanderingStudents() {
+            // אנחנו מדמים פה את המיקום של המורה (למשל, בעיר העתיקה)
+            const mockTeacherLocation = {
+                "ID": 999, // מזהה פיקטיבי למורה
+                "Time": "12:00",
+                "Coordinates": {
+                    "Longitude": { "Degrees": "35", "Minutes": "14", "Seconds": "0" },
+                    "Latitude": { "Degrees": "31", "Minutes": "46", "Seconds": "30" }
+                }
+            };
+
+            try {
+                // שולחים לראוט החדש שיצרנו
+                const response = await fetch('/api/alerts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(mockTeacherLocation)
+                });
+                const data = await response.json();
+
+                // בודקים אם חזרו תלמידות בעייתיות
+                if (data.alerts.length > 0) {
+                    let msg = "🚨 אזעקת התרחקות! התלמידות הבאות רחוקות מ-3 ק\"מ:\n\n";
+                    data.alerts.forEach(student => {
+                        msg += `❌ ${student.Name} (מרחק: ${student.DistanceKM} ק"מ)\n`;
+                    });
+                    alert(msg);
+                } else {
+                    alert("✅ הכל תקין! כל התלמידות בטווח של פחות מ-3 ק\"מ ממך.");
+                }
+            } catch (error) {
+                alert("שגיאה בבדיקת נתונים מול השרת.");
+            }
+        }
     </script>
 </body>
 </html>

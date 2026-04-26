@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 import sqlite3
+import math
 
 app = FastAPI(title="School Trip API")
 
@@ -196,3 +197,59 @@ def get_all_locations():
 @app.get("/map")
 def show_map():
     return FileResponse("map.html")
+    # --- סעיף ג' (בונוס) - מערכת התראות מרחק ---
+
+# פונקציה מתמטית לחישוב מרחק אווירי (בקילומטרים) בין שתי נקודות GPS על כדור קמור
+def calculate_distance_km(lat1, lon1, lat2, lon2):
+    R = 6371.0 # רדיוס כדור הארץ בקילומטרים
+    
+    # המרה ממעלות לרדיאנים (חובה לחישובים טריגונומטריים)
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+    
+    dlon = lon2_rad - lon1_rad
+    dlat = lat2_rad - lat1_rad
+    
+    # נוסחת Haversine
+    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    
+    return R * c # המרחק הסופי בק"מ
+
+# ראוט חדש שמקבל את מיקום המורה ומחזיר רשימת תלמידות שרחוקות מדי
+@app.post("/api/alerts")
+def check_distance(teacher_data: LocationData):
+    # 1. ממירים את מיקום המורה שקיבלנו לעשרוני (השתמשנו באותה מחלקה של התלמידות!)
+    teacher_lat = dms_to_dd(teacher_data.Coordinates.Latitude)
+    teacher_lon = dms_to_dd(teacher_data.Coordinates.Longitude)
+    
+    # 2. שולפים את המיקום של כל התלמידות
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT Locations.*, Students.FirstName, Students.LastName
+        FROM Locations
+        JOIN Students ON Locations.StudentID = Students.ID
+    """)
+    students = cursor.fetchall()
+    conn.close()
+    
+    alerts = []
+    
+    # 3. עוברים על כל תלמידה ובודקים מרחק
+    for student in students:
+        s_lat = student['Latitude']
+        s_lon = student['Longitude']
+        
+        distance = calculate_distance_km(teacher_lat, teacher_lon, s_lat, s_lon)
+        
+        # אם המרחק גדול מ-3 ק"מ, מכניסים אותה לרשימה השחורה
+        if distance > 3.0:
+            alerts.append({
+                "Name": f"{student['FirstName']} {student['LastName']}",
+                "DistanceKM": round(distance, 2) # מעגלים ל-2 ספרות אחרי הנקודה שייראה יפה
+            })
+            
+    return {"status": "success", "alerts": alerts}
