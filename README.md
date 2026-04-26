@@ -49,6 +49,19 @@ A live interactive map that automatically polls and updates student locations ev
 
 ---
 
+## 📸 Screenshots
+
+### Live Map View
+![Map View](./screenshots/map_view.png)
+
+### Distance Violation Alert
+![Distance Alert](./screenshots/distance_alert.png)
+
+### Swagger UI / API Docs
+![Swagger UI](./screenshots/swagger_ui.png)
+
+---
+
 ## 📂 Project Structure
 * main.py: Core backend application, database logic, and mathematical models.
 * map.html: Frontend client and map rendering logic.
