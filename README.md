@@ -59,6 +59,7 @@ A live interactive map that automatically polls and updates student locations ev
 
 ### Swagger UI / API Docs
 ![Swagger UI](./screenshots/swagger_ui.png)
+![Swagger UI](./screenshots/swagger_ui2.png)
 
 ---
 
