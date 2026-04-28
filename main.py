@@ -6,54 +6,50 @@ import math
 
 app = FastAPI(title="School Trip API")
 
-# פונקציית עזר להתחברות לדיבי
+
 def get_db():
-    conn = sqlite3.connect('school_trip.db')
-    conn.row_factory = sqlite3.Row # כדי שנוכל לגשת לעמודות לפי שם
+    conn = sqlite3.connect("school_trip.db")
+    conn.row_factory = sqlite3.Row
     return conn
 
-# יצירת טבלאות אם לא קיימות כבר (ירוץ פעם אחת בהתחלה)
+
 def setup_database():
     conn = get_db()
     cursor = conn.cursor()
-    
-    # טבלת מורות
-    cursor.execute('''
+
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS Teachers (
             ID INTEGER PRIMARY KEY,
             FirstName TEXT NOT NULL,
             LastName TEXT NOT NULL,
             Class TEXT NOT NULL
         )
-    ''')
-    
-    # טבלת תלמידות
-    cursor.execute('''
+    """)
+
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS Students (
             ID INTEGER PRIMARY KEY,
             FirstName TEXT NOT NULL,
             LastName TEXT NOT NULL,
             Class TEXT NOT NULL
         )
-    ''')
-    
-    # טבלת מיקומים
-    cursor.execute('''
+    """)
+
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS Locations (
             StudentID INTEGER PRIMARY KEY,
             Latitude REAL,
             Longitude REAL,
             Timestamp TEXT
         )
-    ''')
-    
+    """)
+
     conn.commit()
     conn.close()
 
+
 setup_database()
 
-
-# --- מחלקות שמייצגות את הנתונים שמקבלים מהקליינט ---
 
 class Teacher(BaseModel):
     ID: int
@@ -61,20 +57,24 @@ class Teacher(BaseModel):
     LastName: str
     Class: str
 
+
 class Student(BaseModel):
     ID: int
     FirstName: str
     LastName: str
     Class: str
 
+
 class CoordinatePart(BaseModel):
     Degrees: str
     Minutes: str
     Seconds: str
 
+
 class Coordinates(BaseModel):
     Longitude: CoordinatePart
     Latitude: CoordinatePart
+
 
 class LocationData(BaseModel):
     ID: int
@@ -82,9 +82,6 @@ class LocationData(BaseModel):
     Time: str
 
 
-# --- פונקציות עזר ---
-
-# פונקציית המרה ממעלות (DMS) לעשרוני (DD)
 def dms_to_dd(coord: CoordinatePart):
     degrees = float(coord.Degrees)
     minutes = float(coord.Minutes)
@@ -92,187 +89,223 @@ def dms_to_dd(coord: CoordinatePart):
     return degrees + (minutes / 60) + (seconds / 3600)
 
 
-# --- ראוטים של המערכת ---
-
-# הוספת מורה חדשה
 @app.post("/api/teachers")
 def add_new_teacher(teacher: Teacher):
     conn = get_db()
     cursor = conn.cursor()
+
     try:
         cursor.execute(
-            "INSERT INTO Teachers (ID, FirstName, LastName, Class) VALUES (?, ?, ?, ?)", 
+            "INSERT INTO Teachers (ID, FirstName, LastName, Class) VALUES (?, ?, ?, ?)",
             (teacher.ID, teacher.FirstName, teacher.LastName, teacher.Class)
         )
         conn.commit()
         return {"status": "success", "msg": "Teacher added!"}
+
     except sqlite3.IntegrityError:
-        print(f"Error: Teacher ID {teacher.ID} already exists in DB")
-        return {"status": "error", "msg": "ID already exists"}
+        return {"status": "error", "msg": "Teacher ID already exists"}
+
     finally:
         conn.close()
 
-# הוספת תלמידה חדשה
+
 @app.post("/api/students")
 def add_new_student(student: Student):
     conn = get_db()
     cursor = conn.cursor()
+
     try:
         cursor.execute(
-            "INSERT INTO Students (ID, FirstName, LastName, Class) VALUES (?, ?, ?, ?)", 
+            "INSERT INTO Students (ID, FirstName, LastName, Class) VALUES (?, ?, ?, ?)",
             (student.ID, student.FirstName, student.LastName, student.Class)
         )
         conn.commit()
         return {"status": "success", "msg": "Student added!"}
+
     except sqlite3.IntegrityError:
-        print(f"Error: Student ID {student.ID} already exists in DB")
-        return {"status": "error", "msg": "ID already exists"}
+        return {"status": "error", "msg": "Student ID already exists"}
+
     finally:
         conn.close()
 
-# קבלת מיקום מהמכשיר
+
 @app.post("/api/locations")
 def update_location(data: LocationData):
-    # המרת הקואורדינטות של התלמידה
     lat_decimal = dms_to_dd(data.Coordinates.Latitude)
     lon_decimal = dms_to_dd(data.Coordinates.Longitude)
-    
+
     conn = get_db()
     cursor = conn.cursor()
-    # שימוש ב-REPLACE כדי שאם התלמידה כבר קיימת בטבלת המיקומים, זה פשוט יעדכן לה את המיקום החדש
+
     cursor.execute(
         "REPLACE INTO Locations (StudentID, Latitude, Longitude, Timestamp) VALUES (?, ?, ?, ?)",
         (data.ID, lat_decimal, lon_decimal, data.Time)
     )
+
     conn.commit()
     conn.close()
-    
-    return {"status": "success", "msg": "Location updated on map!"}
 
-# קבלת כל המורות
+    return {"status": "success", "msg": "Location updated!"}
+
+
 @app.get("/api/teachers")
 def get_all_teachers():
     conn = get_db()
     cursor = conn.cursor()
+
     cursor.execute("SELECT * FROM Teachers")
     res = cursor.fetchall()
-    conn.close()
-    
-    # ממירים את התוצאה לרשימה של מילונים
-    return [dict(row) for row in res]
 
-# קבלת תלמידות (אפשר לפי כיתה ואפשר את כולן)
-@app.get("/api/students")
-def get_all_students(class_name: str = None):
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # אם העבירו כיתה נסנן, אחרת נביא הכל
-    if class_name != None:
-        cursor.execute("SELECT * FROM Students WHERE Class = ?", (class_name,))
-    else:
-        cursor.execute("SELECT * FROM Students")
-        
-    res = cursor.fetchall()
-    conn.close()
-    
-    return [dict(row) for row in res]
-
-# שליפת כל המיקומים המעודכנים של התלמידות (עבור המפה)
-@app.get("/api/locations")
-def get_all_locations():
-    conn = get_db()
-    cursor = conn.cursor()
-    # אנחנו עושים JOIN כדי לקבל לא רק את ה-ID, אלא גם את השם של התלמידה שיוצג על המפה!
-    cursor.execute("""
-        SELECT Locations.*, Students.FirstName, Students.LastName
-        FROM Locations
-        JOIN Students ON Locations.StudentID = Students.ID
-    """)
-    res = cursor.fetchall()
     conn.close()
     return [dict(row) for row in res]
 
-# ראוט שמציג את דף המפה למורה בדפדפן
-@app.get("/map")
-def show_map():
-    return FileResponse("map.html")
-# שליפת מורה ספציפית לפי תעודת זהות
+
 @app.get("/api/teachers/{teacher_id}")
 def get_teacher(teacher_id: int):
     conn = get_db()
     cursor = conn.cursor()
+
     cursor.execute("SELECT * FROM Teachers WHERE ID = ?", (teacher_id,))
     res = cursor.fetchone()
+
     conn.close()
+
     if res:
         return dict(res)
+
     return {"status": "error", "msg": "Teacher not found"}
 
-# שליפת תלמידה ספציפית לפי תעודת זהות
+
+@app.get("/api/students")
+def get_all_students(class_name: str = None):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if class_name is not None:
+        cursor.execute("SELECT * FROM Students WHERE Class = ?", (class_name,))
+    else:
+        cursor.execute("SELECT * FROM Students")
+
+    res = cursor.fetchall()
+    conn.close()
+
+    return [dict(row) for row in res]
+
+
 @app.get("/api/students/{student_id}")
 def get_student(student_id: int):
     conn = get_db()
     cursor = conn.cursor()
+
     cursor.execute("SELECT * FROM Students WHERE ID = ?", (student_id,))
     res = cursor.fetchone()
+
     conn.close()
+
     if res:
         return dict(res)
+
     return {"status": "error", "msg": "Student not found"}
-    # --- סעיף ג' (בונוס) - מערכת התראות מרחק ---
 
-# פונקציה מתמטית לחישוב מרחק אווירי (בקילומטרים) בין שתי נקודות GPS על כדור קמור
-def calculate_distance_km(lat1, lon1, lat2, lon2):
-    R = 6371.0 # רדיוס כדור הארץ בקילומטרים
-    
-    # המרה ממעלות לרדיאנים (חובה לחישובים טריגונומטריים)
-    lat1_rad = math.radians(lat1)
-    lon1_rad = math.radians(lon1)
-    lat2_rad = math.radians(lat2)
-    lon2_rad = math.radians(lon2)
-    
-    dlon = lon2_rad - lon1_rad
-    dlat = lat2_rad - lat1_rad
-    
-    # נוסחת Haversine
-    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    
-    return R * c # המרחק הסופי בק"מ
 
-# ראוט חדש שמקבל את מיקום המורה ומחזיר רשימת תלמידות שרחוקות מדי
-@app.post("/api/alerts")
-def check_distance(teacher_data: LocationData):
-    # 1. ממירים את מיקום המורה שקיבלנו לעשרוני (השתמשנו באותה מחלקה של התלמידות!)
-    teacher_lat = dms_to_dd(teacher_data.Coordinates.Latitude)
-    teacher_lon = dms_to_dd(teacher_data.Coordinates.Longitude)
-    
-    # 2. שולפים את המיקום של כל התלמידות
+@app.get("/api/teachers/{teacher_id}/students")
+def get_students_by_teacher(teacher_id: int):
     conn = get_db()
     cursor = conn.cursor()
+
+    cursor.execute("SELECT Class FROM Teachers WHERE ID = ?", (teacher_id,))
+    teacher = cursor.fetchone()
+
+    if not teacher:
+        conn.close()
+        return {"status": "error", "msg": "Teacher not found"}
+
+    cursor.execute("SELECT * FROM Students WHERE Class = ?", (teacher["Class"],))
+    students = cursor.fetchall()
+
+    conn.close()
+
+    return [dict(row) for row in students]
+
+
+@app.get("/api/locations")
+def get_all_locations():
+    conn = get_db()
+    cursor = conn.cursor()
+
     cursor.execute("""
         SELECT Locations.*, Students.FirstName, Students.LastName
         FROM Locations
         JOIN Students ON Locations.StudentID = Students.ID
     """)
+
+    res = cursor.fetchall()
+    conn.close()
+
+    return [dict(row) for row in res]
+
+
+@app.get("/map")
+def show_map():
+    return FileResponse("map.html")
+
+
+# Bonus feature - distance alerts
+
+def calculate_distance_km(lat1, lon1, lat2, lon2):
+    radius = 6371.0
+
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+
+    dlon = lon2_rad - lon1_rad
+    dlat = lat2_rad - lat1_rad
+
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1_rad)
+        * math.cos(lat2_rad)
+        * math.sin(dlon / 2) ** 2
+    )
+
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return radius * c
+
+
+@app.post("/api/alerts")
+def check_distance(teacher_data: LocationData):
+    teacher_lat = dms_to_dd(teacher_data.Coordinates.Latitude)
+    teacher_lon = dms_to_dd(teacher_data.Coordinates.Longitude)
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT Locations.*, Students.FirstName, Students.LastName
+        FROM Locations
+        JOIN Students ON Locations.StudentID = Students.ID
+    """)
+
     students = cursor.fetchall()
     conn.close()
-    
+
     alerts = []
-    
-    # 3. עוברים על כל תלמידה ובודקים מרחק
+
     for student in students:
-        s_lat = student['Latitude']
-        s_lon = student['Longitude']
-        
-        distance = calculate_distance_km(teacher_lat, teacher_lon, s_lat, s_lon)
-        
-        # אם המרחק גדול מ-3 ק"מ, מכניסים אותה לרשימה השחורה
+        distance = calculate_distance_km(
+            teacher_lat,
+            teacher_lon,
+            student["Latitude"],
+            student["Longitude"]
+        )
+
         if distance > 3.0:
             alerts.append({
                 "Name": f"{student['FirstName']} {student['LastName']}",
-                "DistanceKM": round(distance, 2) # מעגלים ל-2 ספרות אחרי הנקודה שייראה יפה
+                "DistanceKM": round(distance, 2)
             })
-            
+
     return {"status": "success", "alerts": alerts}
