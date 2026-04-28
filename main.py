@@ -8,12 +8,14 @@ app = FastAPI(title="School Trip API")
 
 
 def get_db():
+    # Open connection to the local SQLite database
     conn = sqlite3.connect("school_trip.db")
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def setup_database():
+    # Create the required tables if they do not already exist
     conn = get_db()
     cursor = conn.cursor()
 
@@ -51,6 +53,8 @@ def setup_database():
 setup_database()
 
 
+# Request models
+
 class Teacher(BaseModel):
     ID: int
     FirstName: str
@@ -83,6 +87,7 @@ class LocationData(BaseModel):
 
 
 def dms_to_dd(coord: CoordinatePart):
+    # Convert GPS coordinates from DMS format to decimal degrees
     degrees = float(coord.Degrees)
     minutes = float(coord.Minutes)
     seconds = float(coord.Seconds)
@@ -137,6 +142,7 @@ def update_location(data: LocationData):
     conn = get_db()
     cursor = conn.cursor()
 
+    # Keep only the latest location for each student
     cursor.execute(
         "REPLACE INTO Locations (StudentID, Latitude, Longitude, Timestamp) VALUES (?, ?, ?, ?)",
         (data.ID, lat_decimal, lon_decimal, data.Time)
@@ -181,6 +187,7 @@ def get_all_students(class_name: str = None):
     conn = get_db()
     cursor = conn.cursor()
 
+    # Optional filter: return only students from a specific class
     if class_name is not None:
         cursor.execute("SELECT * FROM Students WHERE Class = ?", (class_name,))
     else:
@@ -213,6 +220,7 @@ def get_students_by_teacher(teacher_id: int):
     conn = get_db()
     cursor = conn.cursor()
 
+    # First get the teacher's class, then return students from the same class
     cursor.execute("SELECT Class FROM Teachers WHERE ID = ?", (teacher_id,))
     teacher = cursor.fetchone()
 
@@ -233,6 +241,7 @@ def get_all_locations():
     conn = get_db()
     cursor = conn.cursor()
 
+    # Join with Students table so the map can show names, not only IDs
     cursor.execute("""
         SELECT Locations.*, Students.FirstName, Students.LastName
         FROM Locations
@@ -253,6 +262,7 @@ def show_map():
 # Bonus feature - distance alerts
 
 def calculate_distance_km(lat1, lon1, lat2, lon2):
+    # Haversine formula for distance between two GPS points
     radius = 6371.0
 
     lat1_rad = math.radians(lat1)
@@ -302,6 +312,7 @@ def check_distance(teacher_data: LocationData):
             student["Longitude"]
         )
 
+        # Alert only if the student is more than 3 km away
         if distance > 3.0:
             alerts.append({
                 "Name": f"{student['FirstName']} {student['LastName']}",
