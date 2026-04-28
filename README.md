@@ -67,3 +67,12 @@ A live interactive map that automatically polls and updates student locations ev
 * main.py: Core backend application, database logic, and mathematical models.
 * map.html: Frontend client and map rendering logic.
 * school_trip.db: SQLite database file.
+* ---
+
+## 💡 Simplifying Assumptions
+
+During the development of this project, the following simplifying assumptions were made:
+1. **Location Updates (Polling vs. WebSockets):** Instead of implementing a complex bidirectional WebSocket connection for real-time data push, the system relies on the client-side map polling the server every 10 seconds. This effectively simulates real-time tracking while keeping the architecture straightforward.
+2. **Local Database:** SQLite was chosen for local data storage (`school_trip.db`). It is assumed that for the scope of this educational assignment, deploying a remote or distributed database is unnecessary.
+3. **Authentication & Authorization:** The system assumes the map and Swagger UI represent the teacher's secure interfaces. Therefore, a full user authentication (Login/Passwords) mechanism was omitted to focus on the core functionality.
+4. **ID Format:** Israeli ID numbers (9 digits) are stored as standard Integers in the database for query convenience, assuming zero-padding validation is handled by the client side.
