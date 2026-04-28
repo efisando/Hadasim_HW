@@ -197,6 +197,29 @@ def get_all_locations():
 @app.get("/map")
 def show_map():
     return FileResponse("map.html")
+# שליפת מורה ספציפית לפי תעודת זהות
+@app.get("/api/teachers/{teacher_id}")
+def get_teacher(teacher_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM Teachers WHERE ID = ?", (teacher_id,))
+    res = cursor.fetchone()
+    conn.close()
+    if res:
+        return dict(res)
+    return {"status": "error", "msg": "Teacher not found"}
+
+# שליפת תלמידה ספציפית לפי תעודת זהות
+@app.get("/api/students/{student_id}")
+def get_student(student_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM Students WHERE ID = ?", (student_id,))
+    res = cursor.fetchone()
+    conn.close()
+    if res:
+        return dict(res)
+    return {"status": "error", "msg": "Student not found"}
     # --- סעיף ג' (בונוס) - מערכת התראות מרחק ---
 
 # פונקציה מתמטית לחישוב מרחק אווירי (בקילומטרים) בין שתי נקודות GPS על כדור קמור
